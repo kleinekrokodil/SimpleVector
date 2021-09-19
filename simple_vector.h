@@ -109,7 +109,12 @@ public:
             delete[] items_;
             items_ = new_vector.items_;
             size_ = new_vector.size_;
-            capacity_ = new_vector.capacity_;
+            if (new_size > capacity_ * 2) {
+                capacity_ = new_vector.capacity_;
+            }
+            else {
+                capacity_ = capacity_ * 2;
+            }
             new_vector.items_ = nullptr;
         }
     }
@@ -149,6 +154,66 @@ public:
     ConstIterator cend() const noexcept {
         return items_ + size_;
     }
+    SimpleVector(const SimpleVector& other) {
+        size_ = other.size_;
+        items_ = new Type[size_];
+        capacity_ = other.capacity_;
+        std::copy(other.begin(), other.end(), begin());
+    }
+
+    SimpleVector& operator=(const SimpleVector& rhs) {
+        if (items_ != rhs.items_) {
+            Resize(rhs.size_);
+            std::copy(rhs.begin(), rhs.end(), begin());
+        }
+        return *this;
+    }
+
+    // Добавляет элемент в конец вектора
+    // При нехватке места увеличивает вдвое вместимость вектора
+    void PushBack(const Type& item) {
+        Resize(size_ + 1);
+        auto it = items_ + size_ - 1;
+        *it = item;
+    }
+
+    // Вставляет значение value в позицию pos.
+    // Возвращает итератор на вставленное значение
+    // Если перед вставкой значения вектор был заполнен полностью,
+    // вместимость вектора должна увеличиться вдвое, а для вектора вместимостью 0 стать равной 1
+    Iterator Insert(ConstIterator pos, const Type& value) {
+        auto distance = pos - cbegin();
+        auto old_size = size_;
+        Resize(size_ + 1);
+        Iterator pos_ = items_ + distance;
+        std::copy_backward(pos_, items_ + old_size, end());
+        *pos_ = value;
+        return pos_;
+    }
+
+    // "Удаляет" последний элемент вектора. Вектор не должен быть пустым
+    void PopBack() noexcept {
+        if (size_ > 0) {
+            --size_;
+        }
+    }
+
+    // Удаляет элемент вектора в указанной позиции
+    Iterator Erase(ConstIterator pos) {
+        auto distance = pos - cbegin();
+        Iterator pos_ = items_ + distance;
+        std::copy(pos_ + 1, end(), pos_);
+        --size_;
+        return pos_;
+    }
+
+    // Обменивает значение с другим вектором
+    void swap(SimpleVector& other) noexcept {
+        std::swap(items_, other.items_);
+        std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
+    }
+
 private:
     // Вместо сырого указателя лучше использовать умный указатель, такой как ArrayPtr
     Type* items_ = nullptr;
@@ -156,3 +221,33 @@ private:
     size_t size_ = 0;
     size_t capacity_ = 0;
 };
+
+template <typename Type>
+inline bool operator==(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
+    return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), [](Type x, Type y) {return x == y; });
+}
+
+template <typename Type>
+inline bool operator!=(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
+    return !(lhs == rhs);
+}
+
+template <typename Type>
+inline bool operator<(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
+    return std::lexicographical_compare(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), [](Type x, Type y) {return x < y; });
+}
+
+template <typename Type>
+inline bool operator<=(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
+    return !(lhs > rhs);
+}
+
+template <typename Type>
+inline bool operator>(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
+    return rhs < lhs;
+}
+
+template <typename Type>
+inline bool operator>=(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
+    return !(lhs < rhs);
+}
