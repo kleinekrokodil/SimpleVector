@@ -4,6 +4,19 @@
 #include <initializer_list>
 #include <algorithm>
 #include <stdexcept>
+#include <functional>
+
+class ReserveProxyObj {
+public:
+    ReserveProxyObj(size_t capacity) {
+        capacity_ = capacity;
+    }
+    size_t capacity_;
+};
+
+ReserveProxyObj Reserve(size_t capacity_to_reserve) {
+    return ReserveProxyObj(capacity_to_reserve);
+}
 
 template <typename Type>
 class SimpleVector {
@@ -36,6 +49,13 @@ public:
         items_ = new Type[size_];
         capacity_ = init.size();
         std::copy(init.begin(), init.end(), begin());
+    }
+
+    // Создаёт пустой вектор и резервирует необходимую память
+    explicit SimpleVector(ReserveProxyObj capacity) {
+        size_ = 0;
+        items_ = new Type[capacity.capacity_];
+        capacity_ = capacity.capacity_;
     }
 
     ~SimpleVector() {
@@ -104,18 +124,18 @@ public:
             size_ = new_size;
         }
         else {
-            SimpleVector new_vector(new_size);
-            std::copy(begin(), end(), new_vector.begin());
-            delete[] items_;
-            items_ = new_vector.items_;
-            size_ = new_vector.size_;
-            if (new_size > capacity_ * 2) {
-                capacity_ = new_vector.capacity_;
+            if (new_size > (capacity_ * 2)) {
+                SimpleVector new_vector(new_size);
+                std::copy(begin(), end(), new_vector.begin());
+                swap(new_vector);
+                size_ = new_size;
             }
-            else {
-                capacity_ = capacity_ * 2;
+            else if (new_size <= (capacity_ * 2)) {
+                SimpleVector new_vector(capacity_ * 2);
+                std::copy(begin(), end(), new_vector.begin());
+                swap(new_vector);
+                size_ = new_size;
             }
-            new_vector.items_ = nullptr;
         }
     }
 
@@ -214,6 +234,18 @@ public:
         std::swap(capacity_, other.capacity_);
     }
 
+    void Reserve(size_t new_capacity) {
+        if (new_capacity > capacity_) {
+            SimpleVector new_vector(new_capacity);
+            std::copy(begin(), end(), new_vector.begin());
+            delete[] items_;
+            items_ = new_vector.items_;
+            capacity_ = new_capacity;
+            new_vector.items_ = nullptr;
+        }
+        else return;
+    }
+
 private:
     // Вместо сырого указателя лучше использовать умный указатель, такой как ArrayPtr
     Type* items_ = nullptr;
@@ -221,6 +253,7 @@ private:
     size_t size_ = 0;
     size_t capacity_ = 0;
 };
+
 
 template <typename Type>
 inline bool operator==(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
