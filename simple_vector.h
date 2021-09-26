@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <functional>
+#include <utility>
 
 class ReserveProxyObj {
 public:
@@ -43,12 +44,12 @@ public:
 
     }
 
-    // Создаёт вектор из std::initializer_list
+    // Создаёт вектор из std::initializer_list 
     SimpleVector(std::initializer_list<Type> init) {
         size_ = init.size();
         items_ = new Type[size_];
         capacity_ = init.size();
-        std::copy(init.begin(), init.end(), begin());
+        std::move(init.begin(), init.end(), begin());
     }
 
     // Создаёт пустой вектор и резервирует необходимую память
@@ -56,6 +57,38 @@ public:
         size_ = 0;
         items_ = new Type[capacity.capacity_];
         capacity_ = capacity.capacity_;
+    }
+
+    //Конструктор копирования и оператор присваивания
+    SimpleVector(const SimpleVector& other) {
+        size_ = other.size_;
+        items_ = new Type[size_];
+        capacity_ = other.capacity_;
+        std::copy(other.begin(), other.end(), begin());
+    }
+
+    SimpleVector& operator=(const SimpleVector& rhs) {
+        if (items_ != rhs.items_) {
+            Resize(rhs.size_);
+            std::copy(rhs.begin(), rhs.end(), begin());
+        }
+        return *this;
+    }
+
+    //Перемещающий конструктор и оператор присваивания
+    SimpleVector(SimpleVector&& other) noexcept {
+        items_ = new Type[other.size_];
+        std::move(other.begin(), other.end(), begin());
+        std::swap(capacity_, other.capacity_);
+        std::swap(size_, other.size_);
+    }
+
+    SimpleVector& operator=(SimpleVector&& rhs) noexcept{
+        if (items_ != rhs.items_) {
+            Resize(rhs.size_);
+            std::move(rhs.begin(), rhs.end(), begin());
+        }
+        return *this;
     }
 
     ~SimpleVector() {
@@ -126,13 +159,13 @@ public:
         else {
             if (new_size > (capacity_ * 2)) {
                 SimpleVector new_vector(new_size);
-                std::copy(begin(), end(), new_vector.begin());
+                std::move(begin(), end(), new_vector.begin());
                 swap(new_vector);
                 size_ = new_size;
             }
             else if (new_size <= (capacity_ * 2)) {
                 SimpleVector new_vector(capacity_ * 2);
-                std::copy(begin(), end(), new_vector.begin());
+                std::move(begin(), end(), new_vector.begin());
                 swap(new_vector);
                 size_ = new_size;
             }
@@ -174,20 +207,7 @@ public:
     ConstIterator cend() const noexcept {
         return items_ + size_;
     }
-    SimpleVector(const SimpleVector& other) {
-        size_ = other.size_;
-        items_ = new Type[size_];
-        capacity_ = other.capacity_;
-        std::copy(other.begin(), other.end(), begin());
-    }
 
-    SimpleVector& operator=(const SimpleVector& rhs) {
-        if (items_ != rhs.items_) {
-            Resize(rhs.size_);
-            std::copy(rhs.begin(), rhs.end(), begin());
-        }
-        return *this;
-    }
 
     // Добавляет элемент в конец вектора
     // При нехватке места увеличивает вдвое вместимость вектора
@@ -195,6 +215,12 @@ public:
         Resize(size_ + 1);
         auto it = items_ + size_ - 1;
         *it = item;
+    }
+
+    void PushBack(Type&& item) {
+        Resize(size_ + 1);
+        auto it = items_ + size_ - 1;
+        std::swap(*it, item);
     }
 
     // Вставляет значение value в позицию pos.
@@ -211,6 +237,16 @@ public:
         return pos_;
     }
 
+    Iterator Insert(ConstIterator pos, Type&& value) {
+        auto distance = pos - cbegin();
+        auto old_size = size_;
+        Resize(size_ + 1);
+        Iterator pos_ = items_ + distance;
+        std::move_backward(pos_, items_ + old_size, end());
+        std::swap(*pos_, value);
+        return pos_;
+    }
+
     // "Удаляет" последний элемент вектора. Вектор не должен быть пустым
     void PopBack() noexcept {
         if (size_ > 0) {
@@ -222,7 +258,7 @@ public:
     Iterator Erase(ConstIterator pos) {
         auto distance = pos - cbegin();
         Iterator pos_ = items_ + distance;
-        std::copy(pos_ + 1, end(), pos_);
+        std::move(pos_ + 1, end(), pos_);
         --size_;
         return pos_;
     }
@@ -237,10 +273,10 @@ public:
     void Reserve(size_t new_capacity) {
         if (new_capacity > capacity_) {
             SimpleVector new_vector(new_capacity);
-            std::copy(begin(), end(), new_vector.begin());
+            std::move(begin(), end(), new_vector.begin());
             delete[] items_;
-            items_ = new_vector.items_;
-            capacity_ = new_capacity;
+            std::exchange(items_, new_vector.items_);
+            std::exchange(capacity_, new_capacity);
             new_vector.items_ = nullptr;
         }
         else return;
