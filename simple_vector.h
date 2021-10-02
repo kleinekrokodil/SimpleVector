@@ -1,5 +1,5 @@
 #pragma once
-
+#include "array_ptr.h"
 #include <cassert>
 #include <initializer_list>
 #include <algorithm>
@@ -29,7 +29,8 @@ public:
 
     // Создаёт вектор из size элементов, инициализированных значением по умолчанию
     explicit SimpleVector(size_t size) {
-        items_ = new Type[size];
+        ArrayPtr<Type> temp_ptr(size);
+        items_.swap(temp_ptr);
         size_ = size;
         capacity_ = size;
         std::fill(begin(), end(), 0);
@@ -37,7 +38,8 @@ public:
 
     // Создаёт вектор из size элементов, инициализированных значением value
     SimpleVector(size_t size, const Type& value) {
-        items_ = new Type[size];
+        ArrayPtr<Type> temp_ptr(size);
+        items_.swap(temp_ptr);
         size_ = size;
         capacity_ = size;
         std::fill(begin(), end(), value);
@@ -47,7 +49,8 @@ public:
     // Создаёт вектор из std::initializer_list 
     SimpleVector(std::initializer_list<Type> init) {
         size_ = init.size();
-        items_ = new Type[size_];
+        ArrayPtr<Type> temp_ptr(size_);
+        items_.swap(temp_ptr);
         capacity_ = init.size();
         std::move(init.begin(), init.end(), begin());
     }
@@ -55,36 +58,38 @@ public:
     // Создаёт пустой вектор и резервирует необходимую память
     explicit SimpleVector(ReserveProxyObj capacity) {
         size_ = 0;
-        items_ = new Type[capacity.capacity_];
+        ArrayPtr<Type> temp_ptr(capacity.capacity_);
+        items_.swap(temp_ptr);
         capacity_ = capacity.capacity_;
     }
 
     //Конструктор копирования и оператор присваивания
     SimpleVector(const SimpleVector& other) {
-        size_ = other.size_;
-        items_ = new Type[size_];
-        capacity_ = other.capacity_;
-        std::copy(other.begin(), other.end(), begin());
+        SimpleVector tmp(other.size_);
+        std::copy(other.begin(), other.end(), tmp.begin());
+        this->swap(tmp);
     }
 
     SimpleVector& operator=(const SimpleVector& rhs) {
-        if (items_ != rhs.items_) {
-            Resize(rhs.size_);
-            std::copy(rhs.begin(), rhs.end(), begin());
+        if (items_.Get() != rhs.items_.Get()) {
+            SimpleVector tmp(rhs.size_);
+            std::copy(rhs.begin(), rhs.end(), tmp.begin());
+            this->swap(tmp);
         }
         return *this;
     }
 
     //Перемещающий конструктор и оператор присваивания
     SimpleVector(SimpleVector&& other) noexcept {
-        items_ = new Type[other.size_];
+        ArrayPtr<Type> temp_ptr(other.size_);
+        items_.swap(temp_ptr);
         std::move(other.begin(), other.end(), begin());
         std::swap(capacity_, other.capacity_);
         std::swap(size_, other.size_);
     }
 
     SimpleVector& operator=(SimpleVector&& rhs) noexcept{
-        if (items_ != rhs.items_) {
+        if (items_.Get() != rhs.items_.Get()) {
             Resize(rhs.size_);
             std::move(rhs.begin(), rhs.end(), begin());
         }
@@ -92,8 +97,7 @@ public:
     }
 
     ~SimpleVector() {
-        delete[] items_;
-        items_ = nullptr;
+        items_.~ArrayPtr();
         size_ = 0;
         capacity_ = 0;
     }
@@ -115,12 +119,12 @@ public:
 
     // Возвращает ссылку на элемент с индексом index
     Type& operator[](size_t index) noexcept {
-        return *(items_ + index);
+        return items_[index];
     }
 
     // Возвращает константную ссылку на элемент с индексом index
     const Type& operator[](size_t index) const noexcept {
-        return *(items_ + index);
+        return items_[index];
     }
 
     // Возвращает константную ссылку на элемент с индексом index
@@ -129,7 +133,7 @@ public:
         if (index >= size_) {
             throw std::out_of_range("Index is out of range");
         }
-        return *(items_ + index);
+        return items_[index];
     }
 
     // Возвращает константную ссылку на элемент с индексом index
@@ -138,7 +142,7 @@ public:
         if (index >= size_) {
             throw std::out_of_range("Index is out of range");
         }
-        return *(items_ + index);
+        return items_[index];
     }
 
     // Обнуляет размер массива, не изменяя его вместимость
@@ -175,37 +179,37 @@ public:
     // Возвращает итератор на начало массива
     // Для пустого массива может быть равен (или не равен) nullptr
     Iterator begin() noexcept {
-        return items_;
+        return items_.Get();
     }
 
     // Возвращает итератор на элемент, следующий за последним
     // Для пустого массива может быть равен (или не равен) nullptr
     Iterator end() noexcept {
-        return items_ + size_;
+        return items_.Get() + size_;
     }
 
     // Возвращает константный итератор на начало массива
     // Для пустого массива может быть равен (или не равен) nullptr
     ConstIterator begin() const noexcept {
-        return items_;
+        return items_.Get();
     }
 
     // Возвращает итератор на элемент, следующий за последним
     // Для пустого массива может быть равен (или не равен) nullptr
     ConstIterator end() const noexcept {
-        return items_ + size_;
+        return items_.Get() + size_;
     }
 
     // Возвращает константный итератор на начало массива
     // Для пустого массива может быть равен (или не равен) nullptr
     ConstIterator cbegin() const noexcept {
-        return items_;
+        return items_.Get();
     }
 
     // Возвращает итератор на элемент, следующий за последним
     // Для пустого массива может быть равен (или не равен) nullptr
     ConstIterator cend() const noexcept {
-        return items_ + size_;
+        return items_.Get() + size_;
     }
 
 
@@ -213,14 +217,16 @@ public:
     // При нехватке места увеличивает вдвое вместимость вектора
     void PushBack(const Type& item) {
         Resize(size_ + 1);
-        auto it = items_ + size_ - 1;
+        SimpleVector tmp(*this);
+        auto it = tmp.items_.Get() + size_ - 1;
         *it = item;
+        this->swap(tmp);
     }
 
     void PushBack(Type&& item) {
         Resize(size_ + 1);
-        auto it = items_ + size_ - 1;
-        std::swap(*it, item);
+        auto it = items_.Get() + size_ - 1;
+        *it = std::move(item);
     }
 
     // Вставляет значение value в позицию pos.
@@ -231,8 +237,8 @@ public:
         auto distance = pos - cbegin();
         auto old_size = size_;
         Resize(size_ + 1);
-        Iterator pos_ = items_ + distance;
-        std::copy_backward(pos_, items_ + old_size, end());
+        Iterator pos_ = items_.Get() + distance;
+        std::copy_backward(pos_, items_.Get() + old_size, end());
         *pos_ = value;
         return pos_;
     }
@@ -241,8 +247,8 @@ public:
         auto distance = pos - cbegin();
         auto old_size = size_;
         Resize(size_ + 1);
-        Iterator pos_ = items_ + distance;
-        std::move_backward(pos_, items_ + old_size, end());
+        Iterator pos_ = items_.Get() + distance;
+        std::move_backward(pos_, items_.Get() + old_size, end());
         std::swap(*pos_, value);
         return pos_;
     }
@@ -257,7 +263,7 @@ public:
     // Удаляет элемент вектора в указанной позиции
     Iterator Erase(ConstIterator pos) {
         auto distance = pos - cbegin();
-        Iterator pos_ = items_ + distance;
+        Iterator pos_ = items_.Get() + distance;
         std::move(pos_ + 1, end(), pos_);
         --size_;
         return pos_;
@@ -265,7 +271,7 @@ public:
 
     // Обменивает значение с другим вектором
     void swap(SimpleVector& other) noexcept {
-        std::swap(items_, other.items_);
+        items_.swap(other.items_);
         std::swap(size_, other.size_);
         std::swap(capacity_, other.capacity_);
     }
@@ -274,18 +280,14 @@ public:
         if (new_capacity > capacity_) {
             SimpleVector new_vector(new_capacity);
             std::move(begin(), end(), new_vector.begin());
-            delete[] items_;
-            std::exchange(items_, new_vector.items_);
+            items_.swap(new_vector.items_);
             std::exchange(capacity_, new_capacity);
-            new_vector.items_ = nullptr;
         }
         else return;
     }
 
 private:
-    // Вместо сырого указателя лучше использовать умный указатель, такой как ArrayPtr
-    Type* items_ = nullptr;
-
+    ArrayPtr<Type> items_{};
     size_t size_ = 0;
     size_t capacity_ = 0;
 };

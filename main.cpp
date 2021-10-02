@@ -1,5 +1,5 @@
 #include "simple_vector.h"
-//#include "tests.h"
+#include "tests.h"
 #include <cassert>
 #include <iostream>
 #include <numeric>
@@ -189,7 +189,7 @@ void TestReserveMethod() {
 int main() {
     TestReserveConstructor();
     TestReserveMethod();
-    //Test1();
+    Test1();
     TestTemporaryObjConstructor();
     TestTemporaryObjOperator();
     TestNamedMoveConstructor();
