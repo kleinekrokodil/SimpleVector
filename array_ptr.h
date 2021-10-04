@@ -1,5 +1,6 @@
+#pragma once
 #include <cstdlib>
-
+#include <algorithm>
 
 template <typename Type>
 class ArrayPtr {
@@ -21,6 +22,13 @@ public:
     // Конструктор из сырого указателя, хранящего адрес массива в куче либо nullptr
     explicit ArrayPtr(Type* raw_ptr) noexcept {
         raw_ptr_ = raw_ptr;
+    }
+
+    // Move-конструктор
+    explicit ArrayPtr(ArrayPtr&& ptr) noexcept {
+        if (raw_ptr_ != ptr.Get()) {
+            raw_ptr_ = ptr.Release();
+        }
     }
 
     // Запрещаем копирование

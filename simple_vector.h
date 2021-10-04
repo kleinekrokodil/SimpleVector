@@ -28,39 +28,34 @@ public:
     SimpleVector() noexcept = default;
 
     // Создаёт вектор из size элементов, инициализированных значением по умолчанию
-    explicit SimpleVector(size_t size) {
-        ArrayPtr<Type> temp_ptr(size);
-        items_.swap(temp_ptr);
-        size_ = size;
-        capacity_ = size;
+    explicit SimpleVector(size_t size):
+        items_(size),
+        size_(size),
+        capacity_(size) {
         std::fill(begin(), end(), 0);
     }
 
     // Создаёт вектор из size элементов, инициализированных значением value
-    SimpleVector(size_t size, const Type& value) {
-        ArrayPtr<Type> temp_ptr(size);
-        items_.swap(temp_ptr);
-        size_ = size;
-        capacity_ = size;
+    SimpleVector(size_t size, const Type& value):
+        items_(size),
+        size_(size),
+        capacity_(size) {
         std::fill(begin(), end(), value);
-
     }
 
     // Создаёт вектор из std::initializer_list 
-    SimpleVector(std::initializer_list<Type> init) {
-        size_ = init.size();
-        ArrayPtr<Type> temp_ptr(size_);
-        items_.swap(temp_ptr);
-        capacity_ = init.size();
+    SimpleVector(std::initializer_list<Type> init)
+    : items_(init.size()),
+        size_(init.size()),
+        capacity_(init.size()) {
         std::move(init.begin(), init.end(), begin());
     }
 
     // Создаёт пустой вектор и резервирует необходимую память
-    explicit SimpleVector(ReserveProxyObj capacity) {
-        size_ = 0;
-        ArrayPtr<Type> temp_ptr(capacity.capacity_);
-        items_.swap(temp_ptr);
-        capacity_ = capacity.capacity_;
+    explicit SimpleVector(ReserveProxyObj capacity)
+        : items_(capacity.capacity_),
+        size_(0),
+        capacity_(capacity.capacity_) {
     }
 
     //Конструктор копирования и оператор присваивания
@@ -72,20 +67,16 @@ public:
 
     SimpleVector& operator=(const SimpleVector& rhs) {
         if (items_.Get() != rhs.items_.Get()) {
-            SimpleVector tmp(rhs.size_);
-            std::copy(rhs.begin(), rhs.end(), tmp.begin());
-            this->swap(tmp);
+            SimpleVector(rhs);
         }
         return *this;
     }
 
     //Перемещающий конструктор и оператор присваивания
-    SimpleVector(SimpleVector&& other) noexcept {
-        ArrayPtr<Type> temp_ptr(other.size_);
-        items_.swap(temp_ptr);
-        std::move(other.begin(), other.end(), begin());
-        std::swap(capacity_, other.capacity_);
+    SimpleVector(SimpleVector&& other) noexcept :
+        items_(std::move(other.items_)) {
         std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
     }
 
     SimpleVector& operator=(SimpleVector&& rhs) noexcept{
@@ -97,9 +88,6 @@ public:
     }
 
     ~SimpleVector() {
-        items_.~ArrayPtr();
-        size_ = 0;
-        capacity_ = 0;
     }
 
     // Возвращает количество элементов в массиве
@@ -216,9 +204,9 @@ public:
     // Добавляет элемент в конец вектора
     // При нехватке места увеличивает вдвое вместимость вектора
     void PushBack(const Type& item) {
-        Resize(size_ + 1);
         SimpleVector tmp(*this);
-        auto it = tmp.items_.Get() + size_ - 1;
+        tmp.Resize(tmp.size_ + 1);
+        auto it = tmp.items_.Get() + tmp.size_ - 1;
         *it = item;
         this->swap(tmp);
     }
